@@ -129,7 +129,7 @@ public class CampaignAdminService {
             campaign.setEndAt(request.endAt());
         }
 
-        return mapToResponse(campaignRepository.save(campaign));
+        return mapToResponse(campaign);
     }
 
     @Transactional
