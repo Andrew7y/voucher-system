@@ -6,28 +6,45 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 @Configuration
 public class RedisConfig {
+    private JsonMapper redisMapper() {
+        return JsonMapper.builder()
+                .activateDefaultTyping(
+                        BasicPolymorphicTypeValidator.builder()
+                                .allowIfBaseType("com.example.vouchersystem")
+                                .allowIfBaseType("java.lang")
+                                .allowIfBaseType("java.time")
+                                .allowIfBaseType("java.util")
+                                .allowIfBaseType("java.math")
+                                .allowIfBaseType("java.util.concurrent")
+                                .allowIfBaseType("java.util.Optional")
+                                .allowIfBaseType("java.util.Record")
+                                .build()
+                )
+                .build();
+    }
+
     @Bean
     public RedisTemplate<String, Object> redisTemplate(
-            RedisConnectionFactory connectionFactory,
-            ObjectMapper objectMapper
+            RedisConnectionFactory connectionFactory
     ){
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
+        GenericJacksonJsonRedisSerializer serializer =
+                new GenericJacksonJsonRedisSerializer(redisMapper());
 
-        // Turn key to string
-        template.setKeySerializer(new StringRedisSerializer());
+        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+        redisTemplate.setConnectionFactory(connectionFactory);
 
-        //Turn value to JSON
-        template.setValueSerializer(new GenericJacksonJsonRedisSerializer(objectMapper));
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
 
-        template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJacksonJsonRedisSerializer(objectMapper));
+        redisTemplate.setValueSerializer(serializer);
+        redisTemplate.setHashValueSerializer(serializer);
 
-        template.afterPropertiesSet();
-        return template;
+        redisTemplate.afterPropertiesSet();
+        return redisTemplate;
     }
 }
