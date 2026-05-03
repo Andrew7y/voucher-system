@@ -18,7 +18,7 @@ public class RedisCacheSyncListener {
     private final RedisService redisService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    @Retryable(maxAttempts = 4, backoff = @Backoff(delay = 1000))
     public void handleCacheSyncEvent(CacheSyncEvent event){
         log.info("DB Commit Successful for Campaign ID = {}. Syncing to Redis...",
                 event.campaignId()
