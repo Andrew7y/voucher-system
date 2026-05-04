@@ -3,16 +3,27 @@ package com.example.vouchersystem.service;
 import com.example.vouchersystem.exception.CacheOperationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RedisService {
     private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisScript<Long> claimVoucherScript;
+
+    public RedisService(
+            RedisTemplate<String, Object> redisTemplate,
+            @Qualifier("claimVoucherScript") RedisScript<Long> claimVoucherScript
+    ){
+        this.redisTemplate = redisTemplate;
+        this.claimVoucherScript = claimVoucherScript;
+    }
 
     public void setValue(
             String key,
@@ -55,6 +66,25 @@ public class RedisService {
         }catch (Exception e){
             log.error("Error deleting from Redis. Key = {}", key, e);
             throw new CacheOperationException("Failed to delete from Redis for key: " + key, e);
+        }
+    }
+
+    public long executeClaimScript(
+            String quotaKey,
+            String claimedUsersKey,
+            String userId
+    ){
+        try{
+            Long result = redisTemplate.execute(
+                    claimVoucherScript,
+                    List.of(quotaKey, claimedUsersKey),
+                    userId
+            );
+
+            return result != null ? result : -1L;
+        }catch (Exception e){
+            log.error("Critical Error executing Claim Lua Script for User ID: {}", userId, e);
+            throw new CacheOperationException("Redis Lua execution failed", e);
         }
     }
 }
