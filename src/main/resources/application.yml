@@ -37,6 +37,11 @@ spring:
     port: ${MQ_PORT}
     username: ${MQ_USER}
     password: ${MQ_PASSWORD}
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        max-retries: 3
 
 server:
   port: 8080
