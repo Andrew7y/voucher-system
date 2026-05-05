@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -26,19 +30,58 @@ public class RedisCacheSyncListener {
 
         try{
             if(event.action() == CacheSyncEvent.Action.UPSERT){
-                event.quotasToSync().forEach((key, quota) -> {
-                    redisService.setValueForever(key, quota);
-                    log.debug("Redis Synced -> Key: {}, Quota: {}", key, quota);
-                });
+                long ttlInSeconds = calculateTtlWithBuffer(event.campaignEndAt());
+
+                if(event.quotasToSync() != null){
+                    event.quotasToSync().forEach((key, quota) -> {
+                        redisService.setValue(key, quota, ttlInSeconds, TimeUnit.SECONDS);
+                        log.debug("Redis Synced -> Key: {}, Quota: {}", key, quota);
+                    });
+                }
+
+                if(event.infoToSync() != null){
+                    event.infoToSync().forEach((key, info) -> {
+                        redisService.setValue(key, info, ttlInSeconds, TimeUnit.SECONDS);
+                        log.debug("Redis Synced -> Key: {}, Info: {}", key, info);
+                    });
+                }
             }else if(event.action() == CacheSyncEvent.Action.DELETE){
-                event.quotasToSync().keySet().forEach(key -> {
-                    redisService.deleteValue(key);
-                    log.debug("Redis Evicted -> Key: {}", key);
-                });
+                if(event.quotasToSync() != null){
+                    event.quotasToSync().keySet().forEach(key -> {
+                        redisService.deleteValue(key);
+                        log.debug("Redis Evicted -> Quota Key: {}", key);
+                    });
+                }
+
+                if(event.infoToSync() != null){
+                    event.infoToSync().keySet().forEach(key -> {
+                        redisService.deleteValue(key);
+                        log.debug("Redis Evicted -> Info Key: {}", key);
+                    });
+                }
             }
         }catch (Exception e){
             log.error("Failed to sync cache for Campaign ID = {}",event.campaignId(), e);
             throw new CacheOperationException("Redis sync failed", e);
         }
+    }
+
+    // ================
+    // Helper Function
+    // ================
+    private long calculateTtlWithBuffer(LocalDateTime endAt){
+        if(endAt == null){
+            return 30 * 24 * 60 * 60L;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if(endAt.isBefore(now)){
+            return 7 * 24 * 60 * 60L;
+        }
+
+        long secondsUnitEnd = Duration.between(now, endAt).getSeconds();
+        long bufferSeconds = 7 * 24 * 60 * 60L;
+
+        return secondsUnitEnd + bufferSeconds;
     }
 }
