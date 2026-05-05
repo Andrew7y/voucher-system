@@ -43,5 +43,14 @@ spring:
         initial-interval: 1000ms
         max-retries: 3
 
+app:
+  env: ${APP_ENV}
+
+alert:
+  slack:
+    enabled: true
+    webhook-url: ${SLACK_WEBHOOK_URL}
+    throttle-interval-ms: 60000
+
 server:
   port: 8080
