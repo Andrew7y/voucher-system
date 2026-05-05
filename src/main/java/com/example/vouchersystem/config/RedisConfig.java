@@ -58,4 +58,12 @@ public class RedisConfig {
         script.setResultType(Long.class);
         return script;
     }
+
+    @Bean
+    public RedisScript<Long> rollbackClaimScript(){
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("scripts/rollback_claim.lua"));
+        script.setResultType(Long.class);
+        return script;
+    }
 }
