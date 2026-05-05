@@ -17,8 +17,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: voucher-redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
 
   # 3. Message Broker
@@ -31,7 +34,11 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  redis_data:
+  rabbitmq_data:
