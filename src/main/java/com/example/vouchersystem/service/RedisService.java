@@ -1,10 +1,15 @@
 package com.example.vouchersystem.service;
 
 import com.example.vouchersystem.exception.CacheOperationException;
+import com.example.vouchersystem.service.alert.AlertService;
+import io.lettuce.core.RedisException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -15,13 +20,19 @@ import java.util.concurrent.TimeUnit;
 public class RedisService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final RedisScript<Long> claimVoucherScript;
+    private final RedisScript<Long> rollbackClaimScript;
+    private final AlertService alertService;
 
     public RedisService(
             RedisTemplate<String, Object> redisTemplate,
-            @Qualifier("claimVoucherScript") RedisScript<Long> claimVoucherScript
+            @Qualifier("claimVoucherScript") RedisScript<Long> claimVoucherScript,
+            @Qualifier("rollbackClaimScript") RedisScript<Long> rollbackClaimScript,
+            AlertService alertService
     ){
         this.redisTemplate = redisTemplate;
         this.claimVoucherScript = claimVoucherScript;
+        this.rollbackClaimScript = rollbackClaimScript;
+        this.alertService = alertService;
     }
 
     public void setValue(
@@ -85,5 +96,56 @@ public class RedisService {
             log.error("Critical Error executing Claim Lua Script for User ID: {}", userId, e);
             throw new CacheOperationException("Redis Lua execution failed", e);
         }
+    }
+
+    @Retryable(
+            backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public void rollbackClaimAtomically(
+            String quotaKey,
+            String claimedUserKey,
+            String userId
+    ){
+        try{
+            Long result = redisTemplate.execute(
+                    rollbackClaimScript,
+                    List.of(quotaKey, claimedUserKey),
+                    userId
+            );
+
+            if(result != null && result == 1L){
+                log.info("Successfully rolled back claim for User ID: {}", userId);
+            }else{
+                log.warn("Rollback bypassed. User ID: {} was not in the claimed set.", userId);
+            }
+        }catch (RedisException e){
+            log.error("CRITICAL DATA LOSS: Failed to rollback Redis claim for User ID: {}. Retrying...",
+                    userId, e);
+            throw e;
+        }
+    }
+
+    @Recover
+    public void recoverRollbackFailure(
+            RedisException e,
+            String quotaKey,
+            String claimedUserKey,
+            String userId
+    ){
+        log.error("CRITICAL DATA LOSS ALERT: Failed to rollback Redis claim for User ID: {} after max retries!",
+                userId, e);
+
+        String subject = "Redis Rollback Failure";
+        String details = String
+                .format(
+                        """
+                                *Affected User ID:* *%s*
+                                *Affected Quota Key:* *%s*
+                                *Claimed Set Key (to remove user):* %s
+                                *Error Message:* `%s`
+                                _Action Required: Check Redis cluster status immediately and manually restore quota._
+                                """, userId, quotaKey, claimedUserKey, e.getMessage());
+        alertService.sendCriticalAlert(subject, details);
+        throw new CacheOperationException("Critical system failure during rollback", e);
     }
 }
