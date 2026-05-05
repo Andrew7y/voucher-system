@@ -1,10 +1,7 @@
 package com.example.vouchersystem.service;
 
 import com.example.vouchersystem.constant.RedisKeyConst;
-import com.example.vouchersystem.domain.dto.CampaignCreateRequest;
-import com.example.vouchersystem.domain.dto.CampaignResponse;
-import com.example.vouchersystem.domain.dto.VoucherRuleCreateRequest;
-import com.example.vouchersystem.domain.dto.VoucherRuleResponse;
+import com.example.vouchersystem.domain.dto.*;
 import com.example.vouchersystem.domain.entity.Campaign;
 import com.example.vouchersystem.domain.entity.CampaignStatus;
 import com.example.vouchersystem.domain.entity.DiscountType;
@@ -27,7 +24,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -188,22 +184,31 @@ public class CampaignAdminService {
         );
     }
 
-    private void publishCacheEvent(Campaign campaign, CacheSyncEvent.Action action){
+    private void publishCacheEvent(Campaign campaign, CacheSyncEvent.Action action) {
+        List<VoucherRule> rules = campaign.getVoucherRules();
 
-        Map<String, Integer> quotaMap = buildQuotaMap(campaign.getVoucherRules());
+        if (rules == null || rules.isEmpty()) return;
+
+        CampaignCacheDto cacheDto = new CampaignCacheDto(
+                campaign.getStatus(),
+                campaign.getStartAt(),
+                campaign.getEndAt()
+        );
+
+        Map<String, Integer> quotaToSync = new HashMap<>(rules.size());
+        Map<String, CampaignCacheDto> infoToSync = new HashMap<>(rules.size());
+
+        for (VoucherRule rule : rules) {
+            quotaToSync.put(RedisKeyConst.getQuotaKey(rule.getId()), rule.getTotalQuota());
+            infoToSync.put(RedisKeyConst.getInfoKey(rule.getId()), cacheDto);
+        }
 
         eventPublisher.publishEvent(new CacheSyncEvent(
                 action,
-                quotaMap,
-                campaign.getId()
+                quotaToSync,
+                infoToSync,
+                campaign.getId(),
+                campaign.getEndAt()
         ));
-    }
-
-    private Map<String, Integer> buildQuotaMap(List<VoucherRule> rules){
-        return rules.stream()
-                .collect(Collectors.toMap(
-                        rule -> RedisKeyConst.getQuotaKey(rule.getId()),
-                        VoucherRule::getTotalQuota
-                ));
     }
 }
