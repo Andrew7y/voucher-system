@@ -9,15 +9,58 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Configuration
 public class RabbitMQConfig {
+    // ==========================================
+    // Constants: (Main Queue)
+    // ==========================================
     public static final String EXCHANGE_VOUCHER = "voucher.exchange";
     public static final String QUEUE_CLAIM = "voucher.claim.queue";
     public static final String ROUTING_KEY_CLAIM = "voucher.claim.routing";
 
+    // ==========================================
+    // Constants: (Dead Letter Queue)
+    // ==========================================
+    public static final String DLX_EXCHANGE = "voucher.dlx";
+    public static final String DLQ_CLAIM = "voucher.claim.dlq";
+    public static final String DLQ_ROUNTING_KEY = "voucher.claim.dlq.routing";
+
+    @Bean
+    public DirectExchange deadLetterExchange(){
+        return new DirectExchange(DLX_EXCHANGE);
+    }
+
+    @Bean
+    public Queue deadLetterQueue(){
+        return new Queue(DLQ_CLAIM, true);
+    }
+
+    @Bean
+    public Binding deadLetterBinding(
+            Queue deadLetterQueue,
+            DirectExchange deadLetterExchange
+    ){
+        return BindingBuilder.bind(deadLetterQueue)
+                .to(deadLetterExchange)
+                .with(DLQ_ROUNTING_KEY);
+    }
+
     @Bean
     public Queue claimQueue(){
-        return new Queue(QUEUE_CLAIM, true);
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-daed-letter-routing-key", DLQ_ROUNTING_KEY);
+
+        return new Queue(
+                QUEUE_CLAIM,
+                true,
+                false,
+                false,
+                args
+        );
     }
 
     @Bean
