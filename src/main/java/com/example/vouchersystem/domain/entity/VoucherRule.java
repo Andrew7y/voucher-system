@@ -37,7 +37,7 @@ public class VoucherRule {
     @Column(name = "discount_value", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountValue;
 
-    @Column(name = "max_discount", precision = 19, scale = 4)
+    @Column(name = "max_discount", nullable = false, precision = 19, scale = 4)
     private BigDecimal maxDiscount;
 
     @Column(name = "min_order_val", nullable = false, precision = 19, scale = 4)
