@@ -17,7 +17,8 @@ CREATE TABLE voucher_rules (
     conditions JSONB,
     total_quota INT NOT NULL,
     discount_type VARCHAR(20) NOT NULL, -- 'FIXED', 'PERCENTAGE'
-    max_discount DECIMAL(19,4),
+    discount_value DECIMAL(19,4) NOT NULL,
+    max_discount DECIMAL(19,4) NOT NULL,
     min_order_val DECIMAL(19,4) NOT NULL DEFAULT 0,
     CONSTRAINT fk_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
 );
