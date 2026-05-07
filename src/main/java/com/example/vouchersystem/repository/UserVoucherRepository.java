@@ -3,8 +3,12 @@ package com.example.vouchersystem.repository;
 import com.example.vouchersystem.domain.entity.UserVoucher;
 import com.example.vouchersystem.domain.entity.UserVoucherStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,4 +19,17 @@ public interface UserVoucherRepository extends JpaRepository<UserVoucher, Long> 
     boolean existsByUserIdAndVoucherRuleId(Long userId, Long ruleId);
 
     Optional<UserVoucher> findByIdAndUserIdAndStatus(Long id, Long userId, UserVoucherStatus status);
+
+    @Query("""
+           SELECT uv FROM UserVoucher uv
+           JOIN FETCH uv.voucherRule vr
+           JOIN FETCH vr.campaign
+           WHERE uv.id = :id AND uv.userId = :userId
+           """)
+    Optional<UserVoucher> findByIdAndUserIdWithRule(@Param("id") Long id, @Param("userId") Long userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE UserVoucher uv SET uv.status = 'USED', uv.usedAt = :usedAt " +
+            "WHERE uv.id = :id AND uv.status = 'UNUSED'")
+    int markAsUsedIfUnused(@Param("id") Long id, @Param("usedAt")LocalDateTime usedAt);
 }
