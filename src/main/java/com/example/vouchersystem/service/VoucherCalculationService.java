@@ -1,0 +1,129 @@
+package com.example.vouchersystem.service;
+
+import com.example.vouchersystem.domain.entity.*;
+import com.example.vouchersystem.exception.BusinessRuleException;
+import com.example.vouchersystem.exception.ResourceNotFoundException;
+import com.example.vouchersystem.repository.OrderVoucherRepository;
+import com.example.vouchersystem.repository.UserVoucherRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class VoucherCalculationService {
+    private final UserVoucherRepository userVoucherRepository;
+    private final OrderVoucherRepository orderVoucherRepository;
+
+    @Transactional
+    public BigDecimal applyVoucher(
+            Long userId,
+            Long userVoucherId,
+            String orderId,
+            BigDecimal orderTotalValue
+    ){
+        log.info("Attempting to apply User Voucher ID: {} for Order ID: {}",
+                userVoucherId, orderId);
+
+        Optional<OrderVoucher> existingOrderVoucher = orderVoucherRepository
+                .findByOrderIdAndUserVoucherId(orderId, userVoucherId);
+        if(existingOrderVoucher.isPresent()){
+            log.info("Idempotency match: Order ID: {} already applied User Voucher ID: {}. Returning existing discount.",
+                    orderId, userVoucherId);
+            return existingOrderVoucher.get().getAppliedDiscount();
+        }
+
+        UserVoucher userVoucher = userVoucherRepository.findByIdAndUserIdWithRule(
+                userVoucherId, userId
+        ).orElseThrow(() -> new ResourceNotFoundException("Voucher not found or access denied."));
+
+        if(userVoucher.getStatus() != UserVoucherStatus.UNUSED){
+            throw new BusinessRuleException("This voucher has already been used or is expired.");
+        }
+
+        VoucherRule rule = userVoucher.getVoucherRule();
+        Campaign campaign = rule.getCampaign();
+        LocalDateTime now = LocalDateTime.now();
+
+        if(now.isBefore(campaign.getStartAt()) || now.isAfter(campaign.getEndAt())){
+            throw new BusinessRuleException("This campaign is no longer active.");
+        }
+        if(campaign.getStatus() != CampaignStatus.ACTIVE){
+            throw new BusinessRuleException("This campaign has been suspended.");
+        }
+
+        if(orderTotalValue.compareTo(rule.getMinOrderVal()) < 0){
+            throw new BusinessRuleException("Minimum order value is " + rule.getMinOrderVal());
+        }
+
+        BigDecimal appliedDiscount;
+
+        if(!rule.getConditions().isEmpty()){
+            appliedDiscount = calculateDiscountWithCondition(
+                    rule, orderTotalValue
+            );
+        }else {
+            appliedDiscount = calculateDiscountWithOutCondition(
+                    rule, orderTotalValue
+            );
+        }
+
+        int updateRows = userVoucherRepository.markAsUsedIfUnused(
+                userVoucher.getId(), now
+        );
+
+        if(updateRows == 0){
+            log.error("Double-spending attempt detected for User Voucher ID: {}", userVoucher.getId());
+            throw new BusinessRuleException("This voucher is currently being processed or already used.");
+        }
+
+        OrderVoucher orderVoucher = OrderVoucher.builder()
+                .orderId(orderId)
+                .userVoucher(userVoucher)
+                .appliedDiscount(appliedDiscount)
+                .createdAt(now)
+                .build();
+
+        orderVoucherRepository.save(orderVoucher);
+        log.info("Successfully applied discount of {} to Order ID:{}",
+                appliedDiscount, orderId);
+        return appliedDiscount;
+    }
+
+    private BigDecimal calculateDiscountWithOutCondition(
+            VoucherRule rule, BigDecimal orderTotalValue
+    ){
+        BigDecimal discount;
+
+        if(rule.getDiscountType() == DiscountType.FIXED_AMOUNT){
+            discount = rule.getMaxDiscount();
+        }else {
+            discount = orderTotalValue
+                    .multiply(rule.getDiscountValue())
+                    .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+
+            if (discount.compareTo(rule.getMaxDiscount()) > 0) {
+                discount = rule.getMaxDiscount();
+            }
+        }
+
+        if (discount.compareTo(orderTotalValue) > 0) {
+            return orderTotalValue;
+        }
+        return discount;
+    }
+
+    private BigDecimal calculateDiscountWithCondition(
+            VoucherRule rule, BigDecimal orderTotalValue
+    ){
+        // Todo 1. Check condition 2. Calculate discount
+        return BigDecimal.ZERO;
+    }
+}
