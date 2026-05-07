@@ -47,6 +47,12 @@ public class CampaignAdminService {
                 .build();
 
         for (VoucherRuleCreateRequest ruleDto : request.voucherRules()){
+            if (ruleDto.maxDiscount().compareTo(ruleDto.minOrderVal()) > 0) {
+                throw new BusinessRuleException(
+                        "Maximum discount cannot be greater than minimum order value"
+                );
+            }
+            
             VoucherRule rule = VoucherRule.builder()
                     .totalQuota(ruleDto.totalQuota())
                     .discountType(ruleDto.discountType())
