@@ -17,9 +17,10 @@ public record VoucherRuleCreateRequest(
         DiscountType discountType,
 
         @NotNull(message = "Discount value is required")
-        @PositiveOrZero(message = "Discount value cannot be positive")
+        @PositiveOrZero(message = "Discount value cannot be negative")
         BigDecimal discountValue,
 
+        @NotNull(message = "Max Discount is required")
         @PositiveOrZero(message = "Max discount cannot be negative")
         BigDecimal maxDiscount,
 
