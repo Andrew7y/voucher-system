@@ -37,6 +37,15 @@ spring:
     port: ${MQ_PORT}
     username: ${MQ_USER}
     password: ${MQ_PASSWORD}
+    listener:
+      simple:
+        concurrency: 5
+        max-concurrency: 10
+        prefetch: 20
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
     template:
       retry:
         enabled: true
