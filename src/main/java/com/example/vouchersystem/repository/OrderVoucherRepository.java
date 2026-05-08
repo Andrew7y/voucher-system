@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface OrderVoucherRepository extends JpaRepository<OrderVoucher, Long> {
     Optional<OrderVoucher> findByOrderIdAndUserVoucherId(String orderId, Long userVoucherId);
+
+    Optional<OrderVoucher> findByOrderId(String orderId);
 }
