@@ -52,11 +52,8 @@ public class VoucherCalculationService {
         Campaign campaign = rule.getCampaign();
         LocalDateTime now = LocalDateTime.now();
 
-        if(now.isBefore(campaign.getStartAt()) || now.isAfter(campaign.getEndAt())){
+        if(!campaign.isActive()){
             throw new BusinessRuleException("This campaign is no longer active.");
-        }
-        if(campaign.getStatus() != CampaignStatus.ACTIVE){
-            throw new BusinessRuleException("This campaign has been suspended.");
         }
 
         if(orderTotalValue.compareTo(rule.getMinOrderVal()) < 0){
