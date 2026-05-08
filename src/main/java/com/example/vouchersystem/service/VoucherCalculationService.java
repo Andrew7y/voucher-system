@@ -97,6 +97,33 @@ public class VoucherCalculationService {
         return appliedDiscount;
     }
 
+    @Transactional
+    public void refundVoucher(String orderId){
+        log.info("Initiating voucher refund process for Order ID: {}", orderId);
+
+        Optional<OrderVoucher> orderVoucherOpt = orderVoucherRepository.findByOrderId(orderId);
+        if(orderVoucherOpt.isEmpty()){
+            log.info("No voucher found for Order ID: {}. Refund process skipped.", orderId);
+            return;
+        }
+        OrderVoucher orderVoucher = orderVoucherOpt.get();
+        UserVoucher userVoucher = orderVoucher.getUserVoucher();
+
+        int updateRows = userVoucherRepository.markAsUnusedIfUsed(
+                userVoucher.getId()
+        );
+        if(updateRows == 0){
+            log.warn("User Voucher ID: {} is alrready unsed.", userVoucher.getId());
+        }
+
+        orderVoucherRepository.delete(orderVoucher);
+        log.info("Successfully refunded User Voucher ID: {} for Order ID: {}",
+                userVoucher.getId(), orderId);
+    }
+
+    // ==========================================
+    // Helper Method
+    // ==========================================
     private BigDecimal calculateDiscountWithOutCondition(
             VoucherRule rule, BigDecimal orderTotalValue
     ){
