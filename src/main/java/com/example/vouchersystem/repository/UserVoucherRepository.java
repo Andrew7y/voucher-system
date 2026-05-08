@@ -32,4 +32,9 @@ public interface UserVoucherRepository extends JpaRepository<UserVoucher, Long> 
     @Query("UPDATE UserVoucher uv SET uv.status = 'USED', uv.usedAt = :usedAt " +
             "WHERE uv.id = :id AND uv.status = 'UNUSED'")
     int markAsUsedIfUnused(@Param("id") Long id, @Param("usedAt")LocalDateTime usedAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE UserVoucher uv SET uv.status = 'UNUSED', " +
+            "uv.usedAt = null WHERE uv.id = :id AND uv.status = 'USED'")
+    int markAsUnusedIfUsed(@Param("id") Long id);
 }
