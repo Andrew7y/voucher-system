@@ -41,6 +41,45 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.badRequest().body(response);
     }
+    
+    @ExceptionHandler(CacheOperationException.class)
+    public ResponseEntity<ErrorResponse> handleCacheOperationException(
+            CacheOperationException cacheOperationException,
+            HttpServletRequest request
+    ){
+        log.warn("Cache operation failed: {}",
+                cacheOperationException.getMessage()
+        );
+        ErrorResponse response = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Internal Server Error",
+                "Failed to perform cache operation",
+                request.getRequestURI(),
+                null
+        );
+        return ResponseEntity.internalServerError().body(response);
+    }
+
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<ErrorResponse> handleSystemException(
+            SystemException systemException,
+            HttpServletRequest request
+    ) {
+        log.error("System error occurred: {}",
+                systemException.getMessage()
+        );
+
+        ErrorResponse response = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Internal Server Error",
+                systemException.getMessage(),
+                request.getRequestURI(),
+                null
+        );
+        return ResponseEntity.internalServerError().body(response);
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(
