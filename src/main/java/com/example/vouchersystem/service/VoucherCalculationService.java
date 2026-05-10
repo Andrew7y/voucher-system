@@ -5,6 +5,9 @@ import com.example.vouchersystem.exception.BusinessRuleException;
 import com.example.vouchersystem.exception.ResourceNotFoundException;
 import com.example.vouchersystem.repository.OrderVoucherRepository;
 import com.example.vouchersystem.repository.UserVoucherRepository;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,14 +24,24 @@ import java.util.Optional;
 public class VoucherCalculationService {
     private final UserVoucherRepository userVoucherRepository;
     private final OrderVoucherRepository orderVoucherRepository;
+    private final ObservationRegistry observationRegistry;
 
     @Transactional
+    @Observed(name = "business.voucher.apply", contextualName = "apply-discount-checkout")
     public BigDecimal applyVoucher(
             Long userId,
             Long userVoucherId,
             String orderId,
             BigDecimal orderTotalValue
     ){
+        Observation currentObservation = observationRegistry.getCurrentObservation();
+        if(currentObservation != null){
+            currentObservation
+                    .highCardinalityKeyValue("order.id", orderId)
+                    .highCardinalityKeyValue("user_voucher.id", String.valueOf(userVoucherId))
+                    .lowCardinalityKeyValue("user.id", String.valueOf(userId));
+        }
+
         log.info("Attempting to apply User Voucher ID: {} for Order ID: {}",
                 userVoucherId, orderId);
 
@@ -57,6 +70,9 @@ public class VoucherCalculationService {
         }
 
         if(orderTotalValue.compareTo(rule.getMinOrderVal()) < 0){
+            if(currentObservation != null){
+                currentObservation.lowCardinalityKeyValue("error.business_reason", "MIN_ORDER_NOT_MET");
+            }
             throw new BusinessRuleException("Minimum order value is " + rule.getMinOrderVal());
         }
 
@@ -95,7 +111,11 @@ public class VoucherCalculationService {
     }
 
     @Transactional
+    @Observed(name = "business.voucher.refund", contextualName = "refund-voucher-payment-failed")
     public void refundVoucher(String orderId){
+        if(observationRegistry.getCurrentObservation() != null){
+            observationRegistry.getCurrentObservation().highCardinalityKeyValue("order.id", orderId);
+        }
         log.info("Initiating voucher refund process for Order ID: {}", orderId);
 
         Optional<OrderVoucher> orderVoucherOpt = orderVoucherRepository.findByOrderId(orderId);
