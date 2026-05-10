@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,4 +38,17 @@ public interface UserVoucherRepository extends JpaRepository<UserVoucher, Long> 
     @Query("UPDATE UserVoucher uv SET uv.status = 'UNUSED', " +
             "uv.usedAt = null WHERE uv.id = :id AND uv.status = 'USED'")
     int markAsUnusedIfUsed(@Param("id") Long id);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("""
+            UPDATE UserVoucher uv SET uv.status = 'EXPIRED'
+            WHERE uv.status = 'UNUSED'
+            AND uv.voucherRule.id IN (
+                SELECT vr.id FROM VoucherRule vr
+                JOIN vr.campaign c
+                WHERE c.endAt < :now OR c.status = 'EXPIRED'
+            )
+    """)
+    int expireUnusedVouchers(@Param("now") LocalDateTime now);
 }
