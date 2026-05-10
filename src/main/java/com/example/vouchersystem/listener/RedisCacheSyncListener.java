@@ -3,6 +3,8 @@ package com.example.vouchersystem.listener;
 import com.example.vouchersystem.event.CacheSyncEvent;
 import com.example.vouchersystem.exception.CacheOperationException;
 import com.example.vouchersystem.service.RedisService;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.retry.annotation.Backoff;
@@ -20,10 +22,18 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class RedisCacheSyncListener {
     private final RedisService redisService;
+    private final ObservationRegistry observationRegistry;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Retryable(maxAttempts = 4, backoff = @Backoff(delay = 1000))
+    @Observed(name = "cache.sync", contextualName = "sync-cache-to-redis")
     public void handleCacheSyncEvent(CacheSyncEvent event){
+        if (observationRegistry.getCurrentObservation() != null){
+            observationRegistry.getCurrentObservation()
+                    .highCardinalityKeyValue("campaign.id", String.valueOf(event.campaignId()))
+                    .lowCardinalityKeyValue("sync.action", event.action().name());
+        }
+
         log.info("DB Commit Successful for Campaign ID = {}. Syncing to Redis...",
                 event.campaignId()
         );
