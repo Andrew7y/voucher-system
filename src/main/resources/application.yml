@@ -63,3 +63,15 @@ alert:
 
 server:
   port: 8080
+
+management:
+  tracing:
+    sampling:
+      probabilty: 1.0
+    enabled: true
+
+logging:
+  level:
+    com.example.vouchersystem: ${LOG_LEVEL}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - [%X{traceId},%X{spanId}] - %msg%n"
