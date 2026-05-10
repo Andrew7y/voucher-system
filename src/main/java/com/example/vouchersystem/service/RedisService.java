@@ -3,6 +3,8 @@ package com.example.vouchersystem.service;
 import com.example.vouchersystem.exception.CacheOperationException;
 import com.example.vouchersystem.service.alert.AlertService;
 import io.lettuce.core.RedisException;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.annotation.Observed;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -22,17 +24,20 @@ public class RedisService {
     private final RedisScript<Long> claimVoucherScript;
     private final RedisScript<Long> rollbackClaimScript;
     private final AlertService alertService;
+    private final ObservationRegistry observationRegistry;
 
     public RedisService(
             RedisTemplate<String, Object> redisTemplate,
             @Qualifier("claimVoucherScript") RedisScript<Long> claimVoucherScript,
             @Qualifier("rollbackClaimScript") RedisScript<Long> rollbackClaimScript,
-            AlertService alertService
+            AlertService alertService,
+            ObservationRegistry observationRegistry
     ){
         this.redisTemplate = redisTemplate;
         this.claimVoucherScript = claimVoucherScript;
         this.rollbackClaimScript = rollbackClaimScript;
         this.alertService = alertService;
+        this.observationRegistry = observationRegistry;
     }
 
     public void setValue(
@@ -79,11 +84,18 @@ public class RedisService {
         }
     }
 
+    @Observed(name = "redis.lua.claim", contextualName = "execute-claim-script")
     public long executeClaimScript(
             String quotaKey,
             String claimedUsersKey,
             String userId
     ){
+        if(observationRegistry.getCurrentObservation() != null){
+            observationRegistry.getCurrentObservation()
+                    .lowCardinalityKeyValue("redis.quota_key", quotaKey)
+                    .highCardinalityKeyValue("user_id", userId);
+        }
+
         try{
             Long result = redisTemplate.execute(
                     claimVoucherScript,
@@ -101,11 +113,18 @@ public class RedisService {
     @Retryable(
             backoff = @Backoff(delay = 1000, multiplier = 2.0)
     )
+    @Observed(name = "redis.lua.rollback", contextualName = "execute-rollback-script")
     public void rollbackClaimAtomically(
             String quotaKey,
             String claimedUserKey,
             String userId
     ){
+        if (observationRegistry.getCurrentObservation() != null){
+            observationRegistry.getCurrentObservation()
+                    .lowCardinalityKeyValue("redis.quota_key", quotaKey)
+                    .highCardinalityKeyValue("user_id", userId);
+        }
+
         try{
             Long result = redisTemplate.execute(
                     rollbackClaimScript,
@@ -126,12 +145,19 @@ public class RedisService {
     }
 
     @Recover
+    @Observed(name = "redis.lua.recover_rollback", contextualName = "recover-rollback-script")
     public void recoverRollbackFailure(
             RedisException e,
             String quotaKey,
             String claimedUserKey,
             String userId
     ){
+        if (observationRegistry.getCurrentObservation() != null){
+            observationRegistry.getCurrentObservation()
+                    .lowCardinalityKeyValue("redis.quota_key", quotaKey)
+                    .highCardinalityKeyValue("user_id", userId);
+        }
+
         log.error("CRITICAL DATA LOSS ALERT: Failed to rollback Redis claim for User ID: {} after max retries!",
                 userId, e);
 
