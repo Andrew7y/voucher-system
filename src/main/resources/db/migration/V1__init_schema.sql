@@ -16,7 +16,7 @@ CREATE TABLE voucher_rules (
     campaign_id BIGINT NOT NULL,
     conditions JSONB,
     total_quota INT NOT NULL,
-    discount_type VARCHAR(20) NOT NULL, -- 'FIXED', 'PERCENTAGE'
+    discount_type VARCHAR(20) NOT NULL, -- 'FIXED_AMOUNT', 'PERCENTAGE'
     discount_value DECIMAL(19,4) NOT NULL,
     max_discount DECIMAL(19,4) NOT NULL,
     min_order_val DECIMAL(19,4) NOT NULL DEFAULT 0,
