@@ -12,6 +12,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - voucher-network
 
   # 2. In-Memory Cache
   redis:
@@ -23,6 +25,8 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - voucher-network
 
   # 3. Message Broker
   rabbitmq:
@@ -37,8 +41,30 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
+    networks:
+      - voucher-network
+
+  voucher-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voucher-spring-boot
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - voucher-network
 
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+
+networks:
+  voucher-network:
+    driver: bridge
