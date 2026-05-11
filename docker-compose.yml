@@ -60,6 +60,21 @@ services:
     networks:
       - voucher-network
 
+  k6-test:
+    image: grafana/k6:latest
+    container_name: k6-loadtest
+    networks:
+      - voucher-network
+    volumes:
+      - ./load-test.js:/scripts/load-test.js
+    environment:
+      - BASE_URL=http://voucher-app:8080
+    command: run /scripts/load-test.js
+    profiles:
+      - test
+    depends_on:
+      - voucher-app
+
 volumes:
   postgres_data:
   redis_data:
