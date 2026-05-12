@@ -43,7 +43,7 @@ public class Campaign extends BaseEntity {
     public boolean isActive(){
         LocalDateTime now = LocalDateTime.now();
         return status == CampaignStatus.ACTIVE &&
-                now.isAfter(startAt) &&
+                (now.isAfter(startAt) || now.isEqual(startAt)) &&
                 now.isBefore(endAt);
     }
 
