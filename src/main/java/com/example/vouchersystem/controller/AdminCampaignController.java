@@ -27,6 +27,14 @@ public class AdminCampaignController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping("/{id}/publish")
+    public ResponseEntity<CampaignResponse> publishCampaign(
+            @PathVariable Long id
+    ) {
+        CampaignResponse response = campaignAdminService.publishCampaign(id);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<CampaignResponse> getCampaign(
             @PathVariable Long id
