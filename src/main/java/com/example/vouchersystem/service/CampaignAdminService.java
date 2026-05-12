@@ -20,6 +20,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,15 +68,39 @@ public class CampaignAdminService {
 
         Campaign savedCampaign = campaignRepository.save(campaign);
         log.info("Successfully created campaign with ID: {}", savedCampaign.getId());
-
-        publishCacheEvent(savedCampaign, CacheSyncEvent.Action.UPSERT);
-
         return mapToResponse(savedCampaign);
     }
 
     @Transactional
+    public CampaignResponse publishCampaign(Long id){
+        Campaign campaign = campaignRepository.findByIdWithRules(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign not found"));
+
+        if (campaign.getStatus() != CampaignStatus.DRAFT) {
+            throw new BusinessRuleException("Only DRAFT campaign can be published");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        if (!campaign.getEndAt().isAfter(now)) {
+            throw new BusinessRuleException("Cannot publish expired campaign");
+        }
+
+        if (campaign.getVoucherRules() == null || campaign.getVoucherRules().isEmpty()) {
+            throw new BusinessRuleException("Campaign must have at least one voucher rule before publishing");
+        }
+
+        campaign.setStatus(CampaignStatus.ACTIVE);
+        Campaign publishedCampaign = campaignRepository.save(campaign);
+
+        log.info("Campaign ID: {} has been published (marked as ACTIVE)", id);
+        publishCacheEvent(publishedCampaign, CacheSyncEvent.Action.UPSERT);
+        return mapToResponse(publishedCampaign);
+    }
+
+    @Transactional
     public CampaignResponse updateCampaign(Long id, CampaignCreateRequest request){
-        Campaign campaign = campaignRepository.findById(id)
+        Campaign campaign = campaignRepository.findByIdWithRules(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Campaign not found"));
 
         if(campaign.getStatus() == CampaignStatus.EXPIRED){
@@ -96,14 +121,16 @@ public class CampaignAdminService {
 
         Campaign updated = campaignRepository.save(campaign);
 
-        publishCacheEvent(updated, CacheSyncEvent.Action.UPSERT);
+        if (updated.getStatus() == CampaignStatus.ACTIVE) {
+            publishCacheEvent(updated, CacheSyncEvent.Action.UPSERT);
+        }
 
         return mapToResponse(campaign);
     }
 
     @Transactional
     public void cancelCampaign(Long id){
-        Campaign campaign = campaignRepository.findById(id)
+        Campaign campaign = campaignRepository.findByIdWithRules(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Campaign not found"));
 
         if(campaign.getStatus() == CampaignStatus.EXPIRED){
