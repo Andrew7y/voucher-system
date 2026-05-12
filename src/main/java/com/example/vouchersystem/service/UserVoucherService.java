@@ -98,17 +98,17 @@ public class UserVoucherService {
         CampaignCacheDto info = (CampaignCacheDto) cacheObj;
         LocalDateTime now = LocalDateTime.now();
 
-        if(info.status() == CampaignStatus.EXPIRED){
+        if(info.getStatus() == CampaignStatus.EXPIRED){
             throw new BusinessRuleException("This campaign has expired.");
         }
-        if(info.status() == CampaignStatus.DRAFT){
+        if(info.getStatus() == CampaignStatus.DRAFT){
             throw new BusinessRuleException("This campaign is currently inactive.");
         }
 
-        if(now.isBefore(info.startAt())){
+        if(now.isBefore(info.getStartAt())){
             throw new BusinessRuleException("This campaign has not started yet.");
         }
-        if(now.isAfter(info.endAt())){
+        if(now.isAfter(info.getEndAt())){
             throw new BusinessRuleException("This campaign has ended.");
         }
     }
